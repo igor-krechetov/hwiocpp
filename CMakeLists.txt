@@ -39,7 +39,11 @@ generateHsm(GEN_HSM ./main.scxml "SwitchHsm" ${GEN_DIR} "GEN_SRC")
 
 # add defined needed by HSMCPP (based on your dispatcher type)
 add_definitions(${HSM_DEFINITIONS_STD})
-add_executable(${BINARY_NAME} main.cpp ${GEN_SRC})
+add_executable(${BINARY_NAME} ${GEN_SRC}
+                              ./src/main.cpp
+                              ./src/devices/GenericDevice.cpp
+                              ./src/devices/i2c/DeviceI2C.cpp
+                              ./src/devices/i2c/aht10.cpp)
 
 add_dependencies(${BINARY_NAME} GEN_HSM)
 
@@ -49,14 +53,22 @@ file(MAKE_DIRECTORY ${GEN_DIR_DIAGRAM})
 generateHsmDiagram(GEN_HSM_DIAGRAM ./main.scxml ${GEN_DIR_DIAGRAM}/main.plantuml)
 add_dependencies(${BINARY_NAME} GEN_HSM_DIAGRAM)
 
+# target_link_directories(${BINARY_NAME} ./thirdparty/lib)
+find_library(LIB_LGPIO
+    NAMES lgpio
+    HINTS "./thirdparty/lib"
+)
+
 target_include_directories(${BINARY_NAME}
     PRIVATE
         ${HSMCPP_STD_INCLUDE} # add HSMCPP to include path
         ${CMAKE_BINARY_DIR}
+        ./thirdparty/include
+        ./src
 )
 
 # link with HSMCPP library (based on used dispatcher)
-target_link_libraries(${BINARY_NAME} PRIVATE ${HSMCPP_STD_LIB})
+target_link_libraries(${BINARY_NAME} PRIVATE ${HSMCPP_STD_LIB} pigpio ${LIB_LGPIO} i2c)
 
 # set compiler options for HSMCPP library (based on used dispatcher)
 target_compile_options(${BINARY_NAME} PRIVATE ${HSMCPP_STD_CXX_FLAGS})
