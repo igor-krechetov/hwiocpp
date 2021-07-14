@@ -1,5 +1,5 @@
-#ifndef __DEVICES_I2C_AHT10_HPP__
-#define __DEVICES_I2C_AHT10_HPP__
+#ifndef __DEVICES_I2C_SENSORS_AHT10_HPP__
+#define __DEVICES_I2C_SENSORS_AHT10_HPP__
 
 #include "devices/i2c/DeviceI2C.hpp"
 
@@ -48,4 +48,4 @@ inline DeviceI2C* AHT10::getDevice()
     return this;
 }
 
-#endif // __DEVICES_I2C_AHT10_HPP__
+#endif // __DEVICES_I2C_SENSORS_AHT10_HPP__

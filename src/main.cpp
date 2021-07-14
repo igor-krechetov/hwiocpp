@@ -5,6 +5,14 @@
 #include "gen/SwitchHsmBase.hpp"
 // #include <pigpio.h>
 #include <lgpio/lgpio.h>
+#include "hsmcpp/logging.hpp"
+#include "devices/i2c/sensors/aht10.hpp"
+#include "devices/i2c/sensors/SoilMoistureSensor.hpp"
+#include "devices/gpio/DeviceGPIO.hpp"
+#include "devices/gpio/Relay.hpp"
+#include "devices/i2c/ads1115.hpp"
+
+__TRACE_PREINIT__();
 
 using namespace std::chrono_literals;
 
@@ -32,29 +40,178 @@ protected:
     }
 };
 
-#include "devices/i2c/aht10.hpp"
 
 void i2c_test()
 {
     AHT10 sensor;
 
-    if (true == sensor.open(1))
+    if (true == sensor.initialize(1))
     {
-        sensor.printCapabilities();
+        sensor.getDevice()->printCapabilities();
 
-        for (int i = 0 ; i < 5 ; ++i)
+        for (int i = 0 ; i < 2 ; ++i)
         {
             SensorDataAHT10 data = sensor.getSensorData();
 
             printf("Temperature: %.1f C\n", data.temperature);
             printf("Humidity: %d %%\n\n", data.humidity);
-            sensor.wait(1000);
+            GenericDevice::wait(1000);
         }
+    }
+}
+
+void ads1115_test()
+{
+    ADS1115 ads;
+
+    ads.setDataRate(RATE_ADS1115_8SPS);
+    ads.setGain(adsGain_t::GAIN_TWO);
+     
+    if (ads.initialize(I2C_ADAPTER_DEFAULT, ADS1X15_ADDRESS))
+    {
+        ads.printCapabilities();
+
+        for (int i = 0 ; i < 5; ++i)
+        {
+            int16_t val = ads.readSingleChannel(ADS_CHANNEL_A2);
+            printf("val=%d\n", (int)val);
+            GenericDevice::wait(1000);
+        }
+    }
+}
+
+void soil_test()
+{
+    ADS1115 ads;
+    SoilMoistureSensor sensor(&ads, ADS_CHANNEL_A3);
+
+    ads.setDataRate(RATE_ADS1115_8SPS);
+     
+    if (ads.initialize(I2C_ADAPTER_DEFAULT, ADS1X15_ADDRESS))
+    {
+        for (int i = 0 ; i < 10; ++i)
+        {
+            printf("moisture=%.2f %, sensor value=%d\n", sensor.getMoistureLevel(), sensor.getRawSensorValue(false));
+            GenericDevice::wait(1000);
+        }
+    }
+}
+
+void relay_test()
+{
+    Relay dev1;
+    DeviceGPIO gpio2;
+
+    if (dev1.initialize({RP_GPIO::GPIO_25}, {RelayNormalState::NORMALLY_OPEN}))
+    {
+        if (gpio2.openDevice())
+        {
+            gpio2.setPinValue(RP_GPIO::GPIO_20, 0);
+            gpio2.wait(200);
+
+            dev1.closeRelay(0);
+            gpio2.setPinValue(RP_GPIO::GPIO_20, 1);
+            gpio2.wait(5000);
+
+            dev1.openRelay(0);
+            gpio2.setPinValue(RP_GPIO::GPIO_20, 0);
+            gpio2.wait(200);
+        }
+    }
+}
+
+void gpio_test()
+{
+    DeviceGPIO gpio2;
+
+    if (gpio2.openDevice())
+    {
+        gpio2.setPinValue(RP_GPIO::GPIO_25, 0);
+        gpio2.wait(200);
+
+        gpio2.setPinValue(RP_GPIO::GPIO_25, 1);
+        gpio2.wait(5000);
+
+        gpio2.setPinValue(RP_GPIO::GPIO_25, 0);
+        gpio2.wait(200);
+    }
+}
+
+void test_shift_register()
+{
+    DeviceGPIO gpio2;
+    // 16 - ser
+    // 20 - storage register clock  RCLK (latch)
+    // 21 - shift register clock (SRCLK) 
+    const RP_GPIO latchPin = RP_GPIO::GPIO_24;
+    const RP_GPIO clockPin = RP_GPIO::GPIO_25;
+    const RP_GPIO dataPin = RP_GPIO::GPIO_23;
+    // const RP_GPIO latchPin = RP_GPIO::GPIO_20;
+    // const RP_GPIO clockPin = RP_GPIO::GPIO_21;
+    // const RP_GPIO dataPin = RP_GPIO::GPIO_16;
+
+    if (gpio2.openDevice())
+    {
+        gpio2.setPinValue(clockPin, 0);
+        gpio2.setPinValue(latchPin, 0);
+        gpio2.setPinValue(dataPin, 0);
+        usleep(1);
+
+        for (int i = 1 ; i < 16; i++)
+        {
+            gpio2.shiftWrite(i, dataPin, clockPin, latchPin);
+            gpio2.wait(250);
+        }
+
+        gpio2.shiftWrite(0, dataPin, clockPin, latchPin);
+
+        gpio2.setPinValue(clockPin, 0);
+        gpio2.setPinValue(latchPin, 0);
+        gpio2.setPinValue(dataPin, 0);
+    }
+
+    printf("test_shift_register - DONE\n");
+}
+
+void test_74hc4051()
+{
+    DeviceGPIO gpio2;
+    const RP_GPIO pinA = RP_GPIO::GPIO_16;
+    const RP_GPIO pinB = RP_GPIO::GPIO_20;
+    const RP_GPIO pinC = RP_GPIO::GPIO_21;
+
+    if (gpio2.openDevice())
+    {
+        printf("test_74hc4051: X0 enabled\n");
+        gpio2.setPinValue(pinA, 0);
+        gpio2.setPinValue(pinB, 0);
+        gpio2.setPinValue(pinC, 0);
+        ads1115_test();
+
+        printf("test_74hc4051: X4 enabled\n");
+        gpio2.setPinValue(pinA, 0);
+        gpio2.setPinValue(pinB, 0);
+        gpio2.setPinValue(pinC, 1);
+        ads1115_test();
+
+        gpio2.setPinValue(pinA, 0);
+        gpio2.setPinValue(pinB, 0);
+        gpio2.setPinValue(pinC, 0);
     }
 }
 
 int main(const int argc, const char**argv)
 {
+    __TRACE_INIT__();
+
+    // i2c_test();
+    // gpio_test();
+    // ads1115_test();
+    soil_test();
+    // test_shift_register();
+    // test_74hc4051();
+
+
     // std::shared_ptr<HsmEventDispatcherSTD> dispatcher = std::make_shared<HsmEventDispatcherSTD>();
     // SwitchHsm hsm;
 
@@ -118,8 +275,7 @@ int main(const int argc, const char**argv)
     //     printf("FAILED\n");
     // }
 
-    i2c_test();
-    // i2c_test2();
+    
 
     return 0;
 }

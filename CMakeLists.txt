@@ -18,6 +18,7 @@ endfunction()
 
 
 # Configure and install HSMCPP library
+SET(HSMBUILD_VERBOSE OFF CACHE BOOL "Enable traces")
 SET(HSMBUILD_EXAMPLES OFF CACHE BOOL "Disable HSM examples")
 SET(HSMBUILD_TESTS OFF CACHE BOOL "Disable HSM tests")
 SET(HSMBUILD_DISPATCHER_GLIB OFF CACHE BOOL "Disable Glib dispatcher")
@@ -42,8 +43,12 @@ add_definitions(${HSM_DEFINITIONS_STD})
 add_executable(${BINARY_NAME} ${GEN_SRC}
                               ./src/main.cpp
                               ./src/devices/GenericDevice.cpp
+                              ./src/devices/gpio/DeviceGPIO.cpp
+                              ./src/devices/gpio/Relay.cpp
                               ./src/devices/i2c/DeviceI2C.cpp
-                              ./src/devices/i2c/aht10.cpp)
+                              ./src/devices/i2c/sensors/aht10.cpp
+                              ./src/devices/i2c/sensors/SoilMoistureSensor.cpp
+                              ./src/devices/i2c/ads1x15.cpp)
 
 add_dependencies(${BINARY_NAME} GEN_HSM)
 
@@ -52,6 +57,7 @@ set(GEN_DIR_DIAGRAM ${CMAKE_BINARY_DIR}/gen_diagram)
 file(MAKE_DIRECTORY ${GEN_DIR_DIAGRAM})
 generateHsmDiagram(GEN_HSM_DIAGRAM ./main.scxml ${GEN_DIR_DIAGRAM}/main.plantuml)
 add_dependencies(${BINARY_NAME} GEN_HSM_DIAGRAM)
+target_compile_definitions(${BINARY_NAME} PUBLIC -DLOGGING_MODE_STRICT_VERBOSE)
 
 # target_link_directories(${BINARY_NAME} ./thirdparty/lib)
 find_library(LIB_LGPIO
@@ -68,7 +74,7 @@ target_include_directories(${BINARY_NAME}
 )
 
 # link with HSMCPP library (based on used dispatcher)
-target_link_libraries(${BINARY_NAME} PRIVATE ${HSMCPP_STD_LIB} pigpio ${LIB_LGPIO} i2c)
+target_link_libraries(${BINARY_NAME} PRIVATE ${HSMCPP_STD_LIB} pigpio ${LIB_LGPIO} i2c gpiod)
 
 # set compiler options for HSMCPP library (based on used dispatcher)
 target_compile_options(${BINARY_NAME} PRIVATE ${HSMCPP_STD_CXX_FLAGS})

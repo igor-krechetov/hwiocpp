@@ -1,5 +1,6 @@
 #include "DeviceI2C.hpp"
 #include <string>
+#include <cstring>
 #include <unistd.h>
 #include <fcntl.h>
 #include <sys/ioctl.h>
@@ -56,7 +57,7 @@ bool DeviceI2C::openDevice(const int adapterNumber, const int address, const int
 
 void DeviceI2C::closeDevice()
 {
-    if (true == isOpen())
+    if (true == isDeviceOpen())
     {
         close(mFD);
         mFD = INVALID_FD;
@@ -68,7 +69,7 @@ byte DeviceI2C::readByte()
 {
     byte result = 0;
 
-    if (true == isOpen())
+    if (true == isDeviceOpen())
     {
         result = i2c_smbus_read_byte(mFD);
     }
@@ -76,11 +77,11 @@ byte DeviceI2C::readByte()
     return result;
 }
 
-byte DeviceI2C::readByte(const char cmd)
+byte DeviceI2C::readByte(const byte cmd)
 {
     byte result = 0;
 
-    if (true == isOpen())
+    if (true == isDeviceOpen())
     {
         result = i2c_smbus_read_byte_data(mFD, cmd);
     }
@@ -88,60 +89,112 @@ byte DeviceI2C::readByte(const char cmd)
     return result;
 }
 
-int DeviceI2C::readBuffer(byte* outBuffer, const size_t bytesCount)
+uint16_t DeviceI2C::readWord(const byte cmd, const Endianness bytesOrder)
 {
-    printf("READ: %lu bytes\n", bytesCount);
+    uint16_t result = 0;
+
+    if (true == isDeviceOpen())
+    {
+        result = i2c_smbus_read_word_data(mFD, cmd);
+        result = normalizeBytes(result, bytesOrder);
+    }
+
+    return result;
+}
+
+int DeviceI2C::readBuffer(byte* outBuffer, const size_t bytesCount, const Endianness bytesOrder)
+{
+    // printf("READ: %lu bytes\n", bytesCount);
     int actualBytes = 0;
 
-    if (true == isOpen())
+    if (true == isDeviceOpen())
     {
         actualBytes = read(mFD, outBuffer, bytesCount);
+
+        const byte* normalizedBuffer = normalizeBytes(outBuffer, actualBytes, bytesOrder);
+
+        if (outBuffer != normalizedBuffer)
+        {
+            memcpy(outBuffer, normalizedBuffer, bytesCount);
+        }
     }
 
     return actualBytes;
 }
 
-bool DeviceI2C::writeBuffer(const std::vector<byte>& buffer)
+bool DeviceI2C::writeData(const uint8_t data)
 {
-    return writeBuffer(buffer.data(), buffer.size());
+    return writeBuffer(reinterpret_cast<const byte*>(&data), sizeof(data), Endianness::NATIVE);
 }
 
-bool DeviceI2C::writeBuffer(const byte* buffer, const size_t bytesCount)
+bool DeviceI2C::writeData(const uint16_t data, const Endianness bytesOrder)
 {
-    printf("WRITE: %lu bytes\n", bytesCount);
+    return writeBuffer(reinterpret_cast<const byte*>(&data), sizeof(data), bytesOrder);
+}
+
+bool DeviceI2C::writeData(const uint32_t data, const Endianness bytesOrder)
+{
+    return writeBuffer(reinterpret_cast<const byte*>(&data), sizeof(data), bytesOrder);
+}
+
+bool DeviceI2C::writeData(const byte cmd, const uint8_t data)
+{
+    return writeBuffer(cmd, reinterpret_cast<const byte*>(&data), sizeof(data), Endianness::NATIVE);
+}
+
+bool DeviceI2C::writeData(const byte cmd, const uint16_t data, const Endianness bytesOrder)
+{
+    // printf("DeviceI2C::writeData: cmd=%d, data=%d (%X)\n", (int)cmd, (int)data, (int)data);
+    return writeBuffer(cmd, reinterpret_cast<const byte*>(&data), sizeof(data), bytesOrder);
+}
+
+bool DeviceI2C::writeData(const byte cmd, const uint32_t data, const Endianness bytesOrder)
+{
+    return writeBuffer(cmd, reinterpret_cast<const byte*>(&data), sizeof(data), bytesOrder);
+}
+
+bool DeviceI2C::writeBuffer(const byte* buffer, const size_t bytesCount, const Endianness bytesOrder)
+{
+    // printf("DeviceI2C::writeBuffer: %lu bytes\n", bytesCount);
     bool result = false;
 
-    if (true == isOpen())
+    if (true == isDeviceOpen())
     {
-        write(mFD, buffer, bytesCount);
+        write(mFD, normalizeBytes(buffer, bytesCount, bytesOrder), bytesCount);
         result = true;
     }
 
     return result;
 }
 
-bool DeviceI2C::writeBuffer(const char cmd, const byte* buffer, const size_t bytesCount)
+bool DeviceI2C::writeBuffer(const std::vector<byte>& buffer, const Endianness bytesOrder)
 {
-    printf("WRITE: %lu bytes\n", bytesCount);
+    return writeBuffer(buffer.data(), buffer.size());
+}
+
+bool DeviceI2C::writeBuffer(const byte cmd, const byte* buffer, const size_t bytesCount, const Endianness bytesOrder)
+{
+    // printf("WRITE: %lu bytes\n", bytesCount);
     bool result = false;
 
-    if (true == isOpen())
+    if (true == isDeviceOpen())
     {
-        // TODO: use different API depending on capabilities
-        result = (0 == i2c_smbus_write_block_data(mFD, cmd, bytesCount, buffer));
+        // NOTE: writes: S Addr Wr [A] Comm [A] Data [A] Data [A] ... [A] Data [A] P
+        //  see: https://www.kernel.org/doc/html/v5.4/i2c/smbus-protocol.html#i2c-block-write-i2c-smbus-write-i2c-block-data
+        result = (0 == i2c_smbus_write_i2c_block_data(mFD, cmd, bytesCount, normalizeBytes(buffer, bytesCount, bytesOrder)));
     }
 
     return result;
 }
 
-bool DeviceI2C::writeBuffer(const char cmd, const std::vector<byte>& buffer)
+bool DeviceI2C::writeBuffer(const byte cmd, const std::vector<byte>& buffer, const Endianness bytesOrder)
 {
     return writeBuffer(cmd, buffer.data(), buffer.size());
 }
 
 void DeviceI2C::printCapabilities()
 {
-    if (true == isOpen())
+    if (true == isDeviceOpen())
     {
         std::string i2cFuncIdName[] = {"I2C_FUNC_I2C",
                                        "I2C_FUNC_10BIT_ADDR",
