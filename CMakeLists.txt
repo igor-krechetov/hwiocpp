@@ -18,7 +18,7 @@ endfunction()
 
 
 # Configure and install HSMCPP library
-SET(HSMBUILD_VERBOSE OFF CACHE BOOL "Enable traces")
+SET(HSMBUILD_VERBOSE ON CACHE BOOL "Enable traces")
 SET(HSMBUILD_EXAMPLES OFF CACHE BOOL "Disable HSM examples")
 SET(HSMBUILD_TESTS OFF CACHE BOOL "Disable HSM tests")
 SET(HSMBUILD_DISPATCHER_GLIB OFF CACHE BOOL "Disable Glib dispatcher")
@@ -45,6 +45,7 @@ add_executable(${BINARY_NAME} ${GEN_SRC}
                               ./src/devices/GenericDevice.cpp
                               ./src/devices/gpio/DeviceGPIO.cpp
                               ./src/devices/gpio/Relay.cpp
+                              ./src/devices/gpio/74hc4051.cpp
                               ./src/devices/i2c/DeviceI2C.cpp
                               ./src/devices/i2c/sensors/aht10.cpp
                               ./src/devices/i2c/sensors/SoilMoistureSensor.cpp

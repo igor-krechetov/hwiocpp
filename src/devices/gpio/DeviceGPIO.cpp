@@ -111,23 +111,19 @@ bool DeviceGPIO::setPinValue(const RP_GPIO pin, const int value)
 {
     __TRACE_CALL_DEBUG_ARGS__("pin=%d, value=%d", SC2INT(pin), value);
     bool result = false;
-    auto itPin = mActiveLines.find(pin);
 
-    if (itPin == mActiveLines.end())
+    if (true == openPin(pin, PIN_DIRECTION::OUTPUT))
     {
-        if (true == openPin(pin, PIN_DIRECTION::OUTPUT))
+        auto itPin = mActiveLines.find(pin);
+
+        if (itPin != mActiveLines.end())
         {
-            itPin = mActiveLines.find(pin);
+            result = (0 == gpiod_line_set_value(itPin->second.line, value));
         }
-    }
-    else if (PIN_DIRECTION::OUTPUT != itPin->second.direction)
-    {
-        changePinDirection(pin, PIN_DIRECTION::OUTPUT);
-    }
-
-    if (itPin != mActiveLines.end())
-    {
-        result = (0 == gpiod_line_set_value(itPin->second.line, value));
+        else
+        {
+            __TRACE_FATAL__("internal data inconsistency! Has this object been used from multiple threads?");
+        }
     }
 
     __TRACE_CALL_RESULT__("%d", BOOL2INT(result));
@@ -138,36 +134,183 @@ bool DeviceGPIO::getPinValue(const RP_GPIO pin, int& outValue)
 {
     __TRACE_CALL_DEBUG_ARGS__("pin=%d", SC2INT(pin));
     bool result = false;
-    auto itPin = mActiveLines.find(pin);
 
-    if (itPin == mActiveLines.end())
+    if (true == openPin(pin, PIN_DIRECTION::INPUT))
     {
-        if (true == openPin(pin, PIN_DIRECTION::INPUT))
+        auto itPin = mActiveLines.find(pin);
+
+        if (itPin != mActiveLines.end())
         {
-            itPin = mActiveLines.find(pin);
-        }
-    }
-    else if (PIN_DIRECTION::INPUT != itPin->second.direction)
-    {
-        changePinDirection(pin, PIN_DIRECTION::INPUT);
-    }
+            int res = gpiod_line_get_value(itPin->second.line);
 
-    if (itPin != mActiveLines.end())
-    {
-        int res = gpiod_line_get_value(itPin->second.line);
-
-        if (res >= 0)
-        {
-            outValue = res;
-            result = true;
+            if (res >= 0)
+            {
+                outValue = res;
+                result = true;
+            }
+            else
+            {
+                result = false;
+            }
         }
         else
         {
-            result = false;
+            __TRACE_FATAL__("internal data inconsistency! Has this object been used from multiple threads?");
         }
+    }
+    else
+    {
+        __TRACE_ERROR__("failed to open pin %d", SC2INT(pin));
     }
 
     __TRACE_CALL_RESULT__("%d (value=%d)", BOOL2INT(result), outValue);
+    return result;
+}
+
+GpioPinsGroupID_t DeviceGPIO::registerPinsGroup(const std::vector<RP_GPIO>& pins)
+{
+    __TRACE_CALL_DEBUG_ARGS__("pins.size=%lu", pins.size());
+    GpioPinsGroupID_t newGroupId = INVALID_GPIO_GROUP_ID;
+
+    if (pins.size() > 0)
+    {
+        if (true == isDeviceOpen())
+        {
+            bool hasFailed = false;
+
+            // open all pins. they all must be available to register a group
+            for (auto itCurPin = pins.begin(); itCurPin != pins.end(); ++itCurPin)
+            {
+                if (false == openPin(*itCurPin, PIN_DIRECTION::UNKNOWN))
+                {
+                    __TRACE_ERROR__("failed to open pin %d", SC2INT(*itCurPin));
+                    hasFailed = true;
+                    break;
+                }
+            }
+
+            if (false == hasFailed)
+            {
+                // Create and init lines bulk
+                struct gpiod_line_bulk groupBulk = GPIOD_LINE_BULK_INITIALIZER;
+                
+                gpiod_line_bulk_init(&groupBulk);
+
+                for (auto itCurPin = pins.begin(); itCurPin != pins.end(); ++itCurPin)
+                {
+                    auto itPinInfo = mActiveLines.find(*itCurPin);
+
+                    // no need to check because openPin() is supposed to make sure pin is available in mActiveLines
+                    gpiod_line_bulk_add(&groupBulk, itPinInfo->second.line);
+                }
+
+                newGroupId = mNextID++;
+                mGroupPins.emplace(newGroupId, pins);
+                mGroups.emplace(newGroupId, groupBulk);
+            }
+            else
+            {
+                // close group pins if we failed to open all of them
+                for (auto itCurPin = pins.begin(); itCurPin != pins.end(); ++itCurPin)
+                {
+                    closePin(*itCurPin);
+                }
+            }
+        }
+    }
+
+    __TRACE_CALL_RESULT__("%d", newGroupId);
+    return newGroupId;
+}
+
+void DeviceGPIO::unregisterPinsGroup(const GpioPinsGroupID_t id)
+{
+    __TRACE_CALL_DEBUG_ARGS__("id=%d", id);
+    auto itGroup = mGroupPins.find(id);
+
+    if (mGroupPins.end() != itGroup)
+    {
+        for (auto itCurPin = itGroup->second.begin(); itCurPin != itGroup->second.end(); ++itCurPin)
+        {
+            closePin(*itCurPin);
+        }
+
+        mGroupPins.erase(itGroup);
+        mGroups.erase(id);
+    }
+}
+
+bool DeviceGPIO::setGroupValues(const GpioPinsGroupID_t id, const std::vector<int>& values)
+{
+    __TRACE_CALL_DEBUG_ARGS__("id=%d", id);
+    bool result = false;
+    auto itPins = mGroupPins.find(id);
+
+    // for (auto it: values)
+    // {
+    //     printf("%d ", it);
+    // }
+    // printf("\n");
+
+    if ((itPins != mGroupPins.end()) && (itPins->second.size() == values.size()))
+    {
+        auto itGroup = mGroups.find(id);
+
+        if (mGroups.end() != itGroup)
+        {
+            if (true == changeGroupDirection(itGroup->first, PIN_DIRECTION::OUTPUT))
+            {
+                if (0 == gpiod_line_set_value_bulk(&(itGroup->second), values.data()))
+                {
+                    result = true;
+                }
+                else
+                {
+                    __TRACE_ERROR__("failed to set values");
+                }
+            }
+        }
+        else
+        {
+            __TRACE_FATAL__("internal data inconsistency! Has this object been used from multiple threads?");
+        }
+    }
+    else
+    {
+        __TRACE_ERROR__("expected %lu values, but got %lu", itPins->second.size(), values.size());
+    }
+
+    return result;
+}
+
+bool DeviceGPIO::getGroupValues(const GpioPinsGroupID_t id, std::vector<int>& outValues)
+{
+    __TRACE_CALL_DEBUG_ARGS__("id=%d", id);
+    bool result = false;
+    auto itGroup = mGroups.find(id);
+    auto itPins = mGroupPins.find(id);
+
+    if ((mGroups.end() != itGroup) && (itPins != mGroupPins.end()))
+    {
+        if (true == changeGroupDirection(itGroup->first, PIN_DIRECTION::INPUT))
+        {
+            outValues.resize(itPins->second.size());
+
+            if (0 == gpiod_line_get_value_bulk(&(itGroup->second), outValues.data()))
+            {
+                result = true;
+            }
+            else
+            {
+                __TRACE_ERROR__("failed to set values");
+            }
+        }
+    }
+    else
+    {
+        __TRACE_ERROR__("group with id=%d wasnt found", id);
+    }
+
     return result;
 }
 
@@ -199,27 +342,60 @@ bool DeviceGPIO::openPin(const RP_GPIO pin, const PIN_DIRECTION direction)
 {
     __TRACE_CALL_DEBUG_ARGS__("pin=%d, direction=%d", SC2INT(pin), SC2INT(direction));
     bool result = false;
-    GpioLineInfo newPinInfo;
+    auto itPin = mActiveLines.find(pin);
 
-    newPinInfo.line = gpiod_chip_get_line(mChip, static_cast<int>(pin));
-    newPinInfo.direction = PIN_DIRECTION::OUTPUT;
-
-    if (nullptr != newPinInfo.line)
+    if (itPin == mActiveLines.end())
     {
-        if (0 == gpiod_line_request_output(newPinInfo.line, "DeviceGPIO", 0))
+        GpioLineInfo newPinInfo;
+
+        newPinInfo.line = gpiod_chip_get_line(mChip, static_cast<int>(pin));
+        newPinInfo.direction = direction;
+
+        if (nullptr != newPinInfo.line)
         {
-            mActiveLines.insert({pin, newPinInfo});
-            result = true;
+            int res = -1;
+
+            switch(direction)
+            {
+                case PIN_DIRECTION::INPUT:
+                    res = gpiod_line_request_input(newPinInfo.line, "DeviceGPIO");
+                    break;
+                case PIN_DIRECTION::OUTPUT:
+                    res = gpiod_line_request_output(newPinInfo.line, "DeviceGPIO", 0);
+                    break;
+                case PIN_DIRECTION::UNKNOWN:
+                    res = 0;
+                    break;
+                default:
+                    break;
+            }
+
+            if (0 == res)
+            {
+                mActiveLines.insert({pin, newPinInfo});
+                result = true;
+            }
+            else
+            {
+                gpiod_line_release(newPinInfo.line);
+                __TRACE_ERROR__("Request line as output failed");
+            }
         }
         else
         {
-            gpiod_line_release(newPinInfo.line);
-            __TRACE_ERROR__("Request line as output failed");
+            __TRACE_ERROR__("Get line failed");
         }
     }
     else
     {
-        __TRACE_ERROR__("Get line failed");
+        if (direction != itPin->second.direction)
+        {
+            result = changePinDirection(pin, direction);
+        }
+        else
+        {
+            result = true;
+        }
     }
 
     return result;
@@ -288,6 +464,77 @@ bool DeviceGPIO::changePinDirection(const RP_GPIO pin, const PIN_DIRECTION direc
     else
     {
         __TRACE_ERROR__("pin not open");
+    }
+
+    return result;
+}
+
+bool DeviceGPIO::changeGroupDirection(const GpioPinsGroupID_t id, const PIN_DIRECTION direction)
+{
+    __TRACE_CALL_DEBUG_ARGS__("pin=%d, direction=%d", id, SC2INT(direction));
+    bool result = false;
+    auto itGroup = mGroups.find(id);
+
+    if (itGroup != mGroups.end())
+    {
+        auto itPins = mGroupPins.find(id);
+
+        if (mGroupPins.end() != itPins)
+        {
+            auto itPinInfo = mActiveLines.find(itPins->second.front());
+
+            if (mActiveLines.end() != itPinInfo)
+            {
+                int res = -1;
+
+                if (direction != itPinInfo->second.direction)
+                {
+                    switch(direction)
+                    {
+                        case PIN_DIRECTION::INPUT:
+                            res = gpiod_line_request_bulk_input(&(itGroup->second), "DeviceGPIO");
+                            break;
+                        case PIN_DIRECTION::OUTPUT:
+                        {
+                            std::vector<int> defValues(itPins->second.size(), 0);
+                            res = gpiod_line_request_bulk_output(&(itGroup->second), "DeviceGPIO", defValues.data());
+                            break;
+                        }
+                        default:
+                            break;
+                    }
+
+                    if (0 == res)
+                    {
+                        auto itPins = mGroupPins.find(id);
+
+                        if (mGroupPins.end() != itPins)
+                        {
+                            for (auto itCurPin = itPins->second.begin(); itCurPin != itPins->second.end(); ++itCurPin)
+                            {
+                                auto itPinInfo = mActiveLines.find(*itCurPin);
+
+                                itPinInfo->second.direction = direction;
+                            }
+                        }
+
+                        result = true;
+                    }
+                    else
+                    {
+                        __TRACE_ERROR__("changing pins group direction failed");
+                    }
+                }
+                else
+                {
+                    result = true;
+                }
+            }
+        }
+    }
+    else
+    {
+        __TRACE_ERROR__("group with id %d was not found", id);
     }
 
     return result;

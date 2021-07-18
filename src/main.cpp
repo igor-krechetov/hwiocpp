@@ -10,6 +10,7 @@
 #include "devices/i2c/sensors/SoilMoistureSensor.hpp"
 #include "devices/gpio/DeviceGPIO.hpp"
 #include "devices/gpio/Relay.hpp"
+#include "devices/gpio/74hc4051.hpp"
 #include "devices/i2c/ads1115.hpp"
 
 __TRACE_PREINIT__();
@@ -89,33 +90,10 @@ void soil_test()
      
     if (ads.initialize(I2C_ADAPTER_DEFAULT, ADS1X15_ADDRESS))
     {
-        for (int i = 0 ; i < 10; ++i)
+        for (int i = 0 ; i < 3; ++i)
         {
             printf("moisture=%.2f %, sensor value=%d\n", sensor.getMoistureLevel(), sensor.getRawSensorValue(false));
-            GenericDevice::wait(1000);
-        }
-    }
-}
-
-void relay_test()
-{
-    Relay dev1;
-    DeviceGPIO gpio2;
-
-    if (dev1.initialize({RP_GPIO::GPIO_25}, {RelayNormalState::NORMALLY_OPEN}))
-    {
-        if (gpio2.openDevice())
-        {
-            gpio2.setPinValue(RP_GPIO::GPIO_20, 0);
-            gpio2.wait(200);
-
-            dev1.closeRelay(0);
-            gpio2.setPinValue(RP_GPIO::GPIO_20, 1);
-            gpio2.wait(5000);
-
-            dev1.openRelay(0);
-            gpio2.setPinValue(RP_GPIO::GPIO_20, 0);
-            gpio2.wait(200);
+            GenericDevice::wait(700);
         }
     }
 }
@@ -175,29 +153,86 @@ void test_shift_register()
 
 void test_74hc4051()
 {
-    DeviceGPIO gpio2;
+    printf("-> test_74hc4051\n");
+    Dev74HC4051 dev;
     const RP_GPIO pinA = RP_GPIO::GPIO_16;
     const RP_GPIO pinB = RP_GPIO::GPIO_20;
     const RP_GPIO pinC = RP_GPIO::GPIO_21;
 
+    // C -> A
+    // 1 -> X4 (C1 B0 A0)
+    // 3 -> X5 (C1 B0 A1)
+
+    if (dev.initialize(pinA, pinB, pinC, 0))
+    {
+        for (int i = 0 ; i < 4; i++)
+        {
+            printf("test_74hc4051: X%d enabled\n", i);
+            dev.selectChannel(i);
+            soil_test();
+        }
+    }
+}
+
+void test_relay()
+{
+    Relay dev1;
+    DeviceGPIO gpio2;
+
+    if (dev1.initialize({RP_GPIO::GPIO_25}, {RelayNormalState::NORMALLY_OPEN}))
+    {
+        if (gpio2.openDevice())
+        {
+            gpio2.setPinValue(RP_GPIO::GPIO_20, 0);
+            gpio2.wait(200);
+
+            dev1.closeRelay(0);
+            gpio2.setPinValue(RP_GPIO::GPIO_20, 1);
+            gpio2.wait(5000);
+
+            dev1.openRelay(0);
+            gpio2.setPinValue(RP_GPIO::GPIO_20, 0);
+            gpio2.wait(200);
+        }
+    }
+}
+
+void test_sr_relay()
+{
+    printf("-> test_sr_relay\n");
+    DeviceGPIO gpio2;
+    // 16 - ser
+    // 20 - storage register clock  RCLK (latch)
+    // 21 - shift register clock (SRCLK) 
+    const RP_GPIO latchPin = RP_GPIO::GPIO_24;
+    const RP_GPIO clockPin = RP_GPIO::GPIO_25;
+    const RP_GPIO dataPin = RP_GPIO::GPIO_23;
+
     if (gpio2.openDevice())
     {
-        printf("test_74hc4051: X0 enabled\n");
-        gpio2.setPinValue(pinA, 0);
-        gpio2.setPinValue(pinB, 0);
-        gpio2.setPinValue(pinC, 0);
-        ads1115_test();
+        gpio2.setPinValue(clockPin, 0);
+        gpio2.setPinValue(latchPin, 0);
+        gpio2.setPinValue(dataPin, 0);
+        usleep(1);
 
-        printf("test_74hc4051: X4 enabled\n");
-        gpio2.setPinValue(pinA, 0);
-        gpio2.setPinValue(pinB, 0);
-        gpio2.setPinValue(pinC, 1);
-        ads1115_test();
+        // 1111 ^ 0001
+        // 1110
+        // 1101
 
-        gpio2.setPinValue(pinA, 0);
-        gpio2.setPinValue(pinB, 0);
-        gpio2.setPinValue(pinC, 0);
+        for (byte i = 1 ; i < 16; i++)
+        {
+            gpio2.shiftWrite(0xFF ^ i, dataPin, clockPin, latchPin);
+            gpio2.wait(700);
+        }
+
+        gpio2.shiftWrite(0xFF, dataPin, clockPin, latchPin);
+
+        gpio2.setPinValue(clockPin, 0);
+        gpio2.setPinValue(latchPin, 0);
+        gpio2.setPinValue(dataPin, 0);
     }
+
+    printf("test_shift_register - DONE\n");
 }
 
 int main(const int argc, const char**argv)
@@ -207,9 +242,10 @@ int main(const int argc, const char**argv)
     // i2c_test();
     // gpio_test();
     // ads1115_test();
-    soil_test();
+    // soil_test();
     // test_shift_register();
-    // test_74hc4051();
+    test_74hc4051();
+    test_sr_relay();
 
 
     // std::shared_ptr<HsmEventDispatcherSTD> dispatcher = std::make_shared<HsmEventDispatcherSTD>();

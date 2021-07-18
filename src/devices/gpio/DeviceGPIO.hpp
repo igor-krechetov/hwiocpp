@@ -20,6 +20,8 @@ enum class RP_GPIOCHIP
 
 enum class RP_GPIO
 {
+    UNKNOWN = -1,
+
     // gpiochip0
     GPIO_00 = 0,
     GPIO_01 = 1,
@@ -104,6 +106,9 @@ enum class RP_GPIO
     SD_OC_N = 7
 };
 
+typedef int GpioPinsGroupID_t;
+#define INVALID_GPIO_GROUP_ID           (-1)
+
 class DeviceGPIO: public GenericDevice
 {
     enum class PIN_DIRECTION
@@ -135,8 +140,23 @@ public:
     void closeDevice() override;
     bool isDeviceOpen() override;
 
+
     bool setPinValue(const RP_GPIO pin, const int value);
     bool getPinValue(const RP_GPIO pin, int& outValue);
+
+
+    // Creates a pins group. groups can be used to read/write multiple values at the same time
+    GpioPinsGroupID_t registerPinsGroup(const std::vector<RP_GPIO>& pins);
+    
+    // Unregister pins group
+    void unregisterPinsGroup(const GpioPinsGroupID_t id);
+    
+    // Write values to all pins in a group. Values count and order should match pins provided to registerPinsGroup()
+    bool setGroupValues(const GpioPinsGroupID_t id, const std::vector<int>& values);
+
+    // Read values from all pins in a group. Values count and order should match pins provided to registerPinsGroup()
+    bool getGroupValues(const GpioPinsGroupID_t id, std::vector<int>& outValues);
+
 
     void shiftWrite(const byte value, const RP_GPIO dataPin, const RP_GPIO clockPin, const RP_GPIO latchPin);
 
@@ -145,6 +165,7 @@ protected:
     void closePin(const RP_GPIO pin);
     void closeAllPins();
     bool changePinDirection(const RP_GPIO pin, const PIN_DIRECTION direction);
+    bool changeGroupDirection(const GpioPinsGroupID_t id, const PIN_DIRECTION direction);
 
 private:
     static std::map<std::string, GpioChipInfo> sOpenChips;
@@ -152,6 +173,9 @@ private:
     std::string mChipName;
     struct gpiod_chip *mChip = nullptr;
     std::map<RP_GPIO, GpioLineInfo> mActiveLines;
+    std::map<GpioPinsGroupID_t, std::vector<RP_GPIO>> mGroupPins;
+    std::map<GpioPinsGroupID_t, struct gpiod_line_bulk> mGroups;
+    GpioPinsGroupID_t mNextID = 1;
 };
 
 #endif // __DEVICES_GPIO_DEVICEGPIO_HPP__
