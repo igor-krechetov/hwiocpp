@@ -20,7 +20,6 @@ GenericDevice::GenericDevice()
 
 void GenericDevice::wait(const unsigned int milliseconds)
 {
-    printf("WAIT: %u ms...\n", milliseconds);
     usleep(milliseconds * 1000);
 }
 

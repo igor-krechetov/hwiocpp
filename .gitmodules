@@ -1,0 +1,3 @@
+[submodule "3rdparty/hsmcpp"]
+	path = 3rdparty/hsmcpp
+	url = https://github.com/igor-krechetov/hsmcpp.git

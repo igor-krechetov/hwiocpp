@@ -18,7 +18,7 @@ public:
                     const unsigned int initialChannel,
                     const RP_GPIO pinInhibitor = RP_GPIO::UNKNOWN);
 
-    // Select which output channel to emable (0 ~ 7)
+    // Select which output channel to enable (0 ~ 7)
     bool selectChannel(const unsigned int channel);
     inline int getCurrentChannel() const;
 

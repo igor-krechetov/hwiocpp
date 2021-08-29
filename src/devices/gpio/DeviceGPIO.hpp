@@ -5,6 +5,8 @@
 #include <string>
 #include <map>
 #include <memory>
+#include <thread>
+#include <functional>
 #include <gpiod.h>
 
 // doc: https://git.kernel.org/pub/scm/libs/libgpiod/libgpiod.git/tree/include/gpiod.h
@@ -106,18 +108,37 @@ enum class RP_GPIO
     SD_OC_N = 7
 };
 
-typedef int GpioPinsGroupID_t;
+enum class GPIO_PIN_PULL
+{
+    AS_IS,
+    DISABLE,
+    PULL_DOWN,
+    PULL_UP
+};
+
+enum class GPIO_PIN_MODE
+{
+    UNKNOWN = 0,
+    INPUT = 1,
+    OUTPUT = 2,
+    EDGE_DETECTION = 3,
+    AS_IS = 3
+};
+
+enum class GPIO_PIN_EDGE_EVENT
+{
+    UNKNOWN,
+    RISING_EDGE = 1,
+    FALLING_EDGE = 2
+};
+
+using GpioPinsGroupID_t = int;
 #define INVALID_GPIO_GROUP_ID           (-1)
+
+using EdgeEventCallback_t = std::function<void(const RP_GPIO, const GPIO_PIN_EDGE_EVENT)>;
 
 class DeviceGPIO: public GenericDevice
 {
-    enum class PIN_DIRECTION
-    {
-        UNKNOWN = 0,
-        INPUT = 1,
-        OUTPUT = 2
-    };
-
     struct GpioChipInfo
     {
         struct gpiod_chip* chip = nullptr;
@@ -128,7 +149,8 @@ class DeviceGPIO: public GenericDevice
     struct GpioLineInfo
     {
         struct gpiod_line* line = nullptr;
-        PIN_DIRECTION direction = PIN_DIRECTION::UNKNOWN;
+        GPIO_PIN_MODE mode = GPIO_PIN_MODE::UNKNOWN;
+        GPIO_PIN_PULL pull = GPIO_PIN_PULL::DISABLE;
     };
 
 public:
@@ -140,10 +162,9 @@ public:
     void closeDevice() override;
     bool isDeviceOpen() override;
 
-
     bool setPinValue(const RP_GPIO pin, const int value);
     bool getPinValue(const RP_GPIO pin, int& outValue);
-
+    bool setPinPullMode(const RP_GPIO pin, const GPIO_PIN_PULL pullMode);
 
     // Creates a pins group. groups can be used to read/write multiple values at the same time
     GpioPinsGroupID_t registerPinsGroup(const std::vector<RP_GPIO>& pins);
@@ -157,15 +178,31 @@ public:
     // Read values from all pins in a group. Values count and order should match pins provided to registerPinsGroup()
     bool getGroupValues(const GpioPinsGroupID_t id, std::vector<int>& outValues);
 
-
     void shiftWrite(const byte value, const RP_GPIO dataPin, const RP_GPIO clockPin, const RP_GPIO latchPin);
 
-protected:
-    bool openPin(const RP_GPIO pin, const PIN_DIRECTION direction);
+    bool openPin(const RP_GPIO pin, const GPIO_PIN_MODE direction, const GPIO_PIN_PULL pullMode = GPIO_PIN_PULL::AS_IS);
+    bool openPin(const RP_GPIO pin, const GPIO_PIN_PULL pullMode = GPIO_PIN_PULL::AS_IS);
     void closePin(const RP_GPIO pin);
     void closeAllPins();
-    bool changePinDirection(const RP_GPIO pin, const PIN_DIRECTION direction);
-    bool changeGroupDirection(const GpioPinsGroupID_t id, const PIN_DIRECTION direction);
+
+    void registerEdgeEventsCallback(const EdgeEventCallback_t& callback);
+    void unregisterEdgeEventsCallback();
+
+    // void stopEdgeEventsMonitorining(const RP_GPIO pin);
+    // void stopEdgeEventsMonitorining(const GpioPinsGroupID_t groupID);
+
+protected:
+    bool startEdgeEventsMonitorining(const RP_GPIO pin);
+    void startEdgeEventsMonitorining(const GpioPinsGroupID_t groupID);
+
+    bool changePinDirection(const RP_GPIO pin, const GPIO_PIN_MODE direction);
+    bool changePinPullMode(const RP_GPIO pin, const GPIO_PIN_PULL pullMode);
+    bool changeGroupDirection(const GpioPinsGroupID_t id, const GPIO_PIN_MODE direction);
+
+    int gpio_get_pull(unsigned int nr);
+    bool gpio_set_pull(const int gpio, const GPIO_PIN_PULL type);
+
+    void threadEdgeMonitoring();
 
 private:
     static std::map<std::string, GpioChipInfo> sOpenChips;
@@ -176,6 +213,10 @@ private:
     std::map<GpioPinsGroupID_t, std::vector<RP_GPIO>> mGroupPins;
     std::map<GpioPinsGroupID_t, struct gpiod_line_bulk> mGroups;
     GpioPinsGroupID_t mNextID = 1;
+
+    EdgeEventCallback_t mEdgeCallback;
+    std::thread mMonitoringThread;
+    bool mIsMonitoring = false;
 };
 
 #endif // __DEVICES_GPIO_DEVICEGPIO_HPP__
