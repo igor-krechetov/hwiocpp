@@ -3,6 +3,7 @@
 #include <sys/mman.h>
 #include <fcntl.h>
 #include <unistd.h>
+#include <cstring>
 
 #undef __TRACE_CLASS__
 #define __TRACE_CLASS__                         "DeviceGPIO"
@@ -139,6 +140,99 @@ void DeviceGPIO::closeDevice()
 bool DeviceGPIO::isDeviceOpen()
 {
     return (nullptr != mChip);
+}
+
+void DeviceGPIO::test2()
+{
+    const RP_GPIO latchPin = RP_GPIO::GPIO_21;
+    const RP_GPIO clockPin = RP_GPIO::GPIO_20;
+    const RP_GPIO dataPin = RP_GPIO::GPIO_16;
+
+    setPinValue(clockPin, 0);
+    setPinValue(latchPin, 0);
+    setPinValue(dataPin, 0);
+
+    setPinValue(clockPin, 1);
+    wait(1000);
+    setPinValue(latchPin, 1);
+    wait(1000);
+    setPinValue(dataPin, 1);
+    wait(1000);
+
+    setPinValue(clockPin, 0);
+    setPinValue(latchPin, 0);
+    setPinValue(dataPin, 0);
+}
+
+void DeviceGPIO::test()
+{
+    const RP_GPIO latchPin = RP_GPIO::GPIO_21;
+    const RP_GPIO clockPin = RP_GPIO::GPIO_20;
+    const RP_GPIO dataPin = RP_GPIO::GPIO_16;
+
+    struct gpiod_line * line3 = gpiod_chip_find_line(mChip, "GPIO16");
+    struct gpiod_line * line1 = gpiod_chip_find_line(mChip, "GPIO20");
+    struct gpiod_line * line2 = gpiod_chip_find_line(mChip, "GPIO21");
+
+    printf("GPIO16=%d\n", gpiod_line_offset(line3));
+    printf("GPIO20=%d\n", gpiod_line_offset(line1));
+    printf("GPIO21=%d\n", gpiod_line_offset(line2));
+
+    printf("BEGIN (%s)\n", gpiod_version_string());
+
+    printf("%d to LOW\n", (int)clockPin);
+    // gpiod_line * line1 = gpiod_chip_get_line(mChip, static_cast<int>(clockPin));
+    struct gpiod_line_request_config gpioConfig1;
+    gpioConfig1.consumer = GPIO_CONSUMER_NAME;
+    gpioConfig1.request_type = GPIOD_LINE_REQUEST_DIRECTION_OUTPUT;
+    printf("flags1=%d\n", gpioConfig1.flags);
+    // struct gpiod_line_request_config gpioConfig1 = {
+	// 	.consumer = GPIO_CONSUMER_NAME,
+	// 	.request_type = GPIOD_LINE_REQUEST_DIRECTION_OUTPUT,
+	// };
+    gpiod_line_request(line1, &gpioConfig1, 0);
+    // gpiod_line_request_output(line1, GPIO_CONSUMER_NAME, 0);
+    gpiod_line_set_value(line1, 0);
+    gpiod_line_release(line1);
+    wait(1000);
+
+    printf("%d to LOW\n", (int)latchPin);
+    // gpiod_line * line2 = gpiod_chip_get_line(mChip, static_cast<int>(latchPin));
+    // struct gpiod_line_request_config gpioConfig2;
+    // gpioConfig2.consumer = GPIO_CONSUMER_NAME;
+    // gpioConfig2.request_type = GPIOD_LINE_REQUEST_DIRECTION_OUTPUT;
+    struct gpiod_line_request_config gpioConfig2 = {
+		.consumer = GPIO_CONSUMER_NAME,
+		.request_type = GPIOD_LINE_REQUEST_DIRECTION_OUTPUT,
+	};
+    printf("flags2=%d\n", gpioConfig2.flags);
+    gpiod_line_request(line2, &gpioConfig2, 0);
+    // gpiod_line_request_output(line2, GPIO_CONSUMER_NAME, 0);
+    gpiod_line_set_value(line2, 0);
+    gpiod_line_release(line2);
+    wait(1000);
+
+    printf("%d to LOW\n", (int)dataPin);
+    // gpiod_line * line3 = gpiod_chip_get_line(mChip, static_cast<int>(dataPin));
+    // struct gpiod_line_request_config gpioConfig3;
+    // gpioConfig3.consumer = GPIO_CONSUMER_NAME;
+    // gpioConfig3.request_type = GPIOD_LINE_REQUEST_DIRECTION_OUTPUT;
+    struct gpiod_line_request_config gpioConfig3 = {
+		.consumer = GPIO_CONSUMER_NAME,
+		.request_type = GPIOD_LINE_REQUEST_DIRECTION_OUTPUT,
+	};
+    printf("flags3=%d\n", gpioConfig3.flags);
+    gpiod_line_request(line3, &gpioConfig3, 0);
+    // gpiod_line_request_output(line3, GPIO_CONSUMER_NAME, 0);
+    gpiod_line_set_value(line3, 0);
+
+    wait(2000);
+
+    printf("16 to HIGH\n");
+    gpiod_line_set_value(line3, 1);
+    printf("DONE\n");
+
+    gpiod_line_release(line3);
 }
 
 bool DeviceGPIO::setPinValue(const RP_GPIO pin, const int value)
@@ -382,7 +476,9 @@ void DeviceGPIO::shiftWrite(const byte val, const RP_GPIO dataPin, const RP_GPIO
 
     // put latch up to store data on register
     setPinValue(clockPin, 0);
+    printf("------------------------\n");
     setPinValue(latchPin, 1);
+    printf("------------------------\n");
     setPinValue(clockPin, 1);
 }
 
@@ -402,6 +498,11 @@ bool DeviceGPIO::openPin(const RP_GPIO pin, const GPIO_PIN_MODE mode, const GPIO
         if (nullptr != newPinInfo.line)
         {
             struct gpiod_line_request_config gpioConfig;
+
+            memset(&gpioConfig, 0, sizeof(gpiod_line_request_config));
+            printf("flags=%d\n", gpioConfig.flags);
+            printf("request_type=%d\n", gpioConfig.request_type);
+            printf("consumer=%p\n", gpioConfig.consumer);
 
             if (true == setPinPullMode(pin, pullMode))
             {
@@ -432,6 +533,7 @@ bool DeviceGPIO::openPin(const RP_GPIO pin, const GPIO_PIN_MODE mode, const GPIO
                     if ((true == result) && (0 == gpiod_line_request(newPinInfo.line, &gpioConfig, 0)))
                     {
                         mActiveLines.insert({pin, newPinInfo});
+                        printf("------ mActiveLines=%lu, newPinInfo.line=%p\n", mActiveLines.size(), newPinInfo.line);
                     }
                     else
                     {
@@ -463,11 +565,13 @@ bool DeviceGPIO::openPin(const RP_GPIO pin, const GPIO_PIN_MODE mode, const GPIO
 
         if ((GPIO_PIN_MODE::AS_IS != mode) && (mode != itPin->second.mode))
         {
+            printf("---- 1\n");
             result = changePinDirection(pin, mode);
         }
 
         if ((GPIO_PIN_PULL::AS_IS != pullMode) && (pullMode != itPin->second.pull))
         {
+            printf("---- 2\n");
             result = changePinPullMode(pin, pullMode);
         }
     }

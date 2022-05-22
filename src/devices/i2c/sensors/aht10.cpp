@@ -41,14 +41,21 @@ bool AHT10::initialize(const int adapterNumber)
         const byte mode = AHT10_MODE_DEF_CALIBRATION | AHT10_MODE_CYCLE;
 
         writeBuffer(AHT10_CMD_INIT, {mode, 0x00});
-        wait(AHT10_DELAY_POWER_ON);
+        wait(AHT10_DELAY_POWER_ON);// Try mult by 2 if not always initialized
 
         const byte status = readByte();
 
-        printf("CONFIG => 0x%X\n", status);
+        printf("CONFIG => 0x%X, %d\n", status, (int)status);
+        byte m = 1;
+        for (byte i = 0 ; i < 8 ; ++i)
+        {
+            printf("[%d] = %d\n", (int)i, (int)(status & m));
+            m = m << 1;
+        }
 
         if (status & AHT10_STATUS_BIT_CALIBRATION)
         {
+            printf("----- OK\n");
             result = true;
         }
     }
@@ -58,6 +65,7 @@ bool AHT10::initialize(const int adapterNumber)
         closeDevice();
     }
 
+    printf("result=%d\n", (int)result);
     return result;
 }
 

@@ -25,11 +25,12 @@
 
 import RPi.GPIO as GPIO
 import sys
+import time
 
 #define PINs according to cabling
 dataPIN = 16
-latchPIN = 20
-clockPIN = 21
+latchPIN = 21
+clockPIN = 20
 
 #set pins to putput
 GPIO.setmode(GPIO.BCM)
@@ -39,23 +40,37 @@ GPIO.setup((dataPIN,latchPIN,clockPIN),GPIO.OUT)
 def shift_update(input,data,clock,latch):
   #put latch down to start data sending
   GPIO.output(clock,0)
+  # time.sleep(0.5)
   GPIO.output(latch,0)
+  # time.sleep(0.5)
   GPIO.output(clock,1)
+  # time.sleep(0.5)
+
+  print(input)
   
   #load data in reverse order
   for i in range(7, -1, -1):
     GPIO.output(clock,0)
+    # time.sleep(0.5)
     GPIO.output(data, int(input[i]))
+    # time.sleep(0.5)
     GPIO.output(clock,1)
+    # time.sleep(0.5)
   
   #put latch up to store data on register
   GPIO.output(clock,0)
+  # time.sleep(0.5)
   GPIO.output(latch,1)
+  # time.sleep(0.5)
   GPIO.output(clock,1)
+  # time.sleep(0.5)
+
 
 #main program, calling shift register function
 #uses "sys.argv" to pass arguments from command line
 shift_update(sys.argv[1],dataPIN,clockPIN,latchPIN)
+# print("sleep 10...")
+# time.sleep(10.0)
 
 #PINs final cleaning
 GPIO.cleanup()

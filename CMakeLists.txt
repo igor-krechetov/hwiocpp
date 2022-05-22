@@ -94,39 +94,39 @@ target_compile_options(${BINARY_NAME} PRIVATE ${HSMCPP_STD_CXX_FLAGS})
 
 
 
-set(CMAKE_AUTOMOC ON)
-set(CMAKE_AUTORCC ON)
-set(CMAKE_AUTOUIC ON)
-if (WIN32)
-    cmake_policy(SET CMP0071 NEW)
-    cmake_policy(SET CMP0020 NEW)
-endif()
+# set(CMAKE_AUTOMOC ON)
+# set(CMAKE_AUTORCC ON)
+# set(CMAKE_AUTOUIC ON)
+# if (WIN32)
+#     cmake_policy(SET CMP0071 NEW)
+#     cmake_policy(SET CMP0020 NEW)
+# endif()
 
-if (CMAKE_VERSION VERSION_LESS "3.7.0")
-    set(CMAKE_INCLUDE_CURRENT_DIR ON)
-endif()
+# if (CMAKE_VERSION VERSION_LESS "3.7.0")
+#     set(CMAKE_INCLUDE_CURRENT_DIR ON)
+# endif()
 
-find_package(Qt5 COMPONENTS Core REQUIRED)
-# set(PKG_CONFIG_PATH ${PKG_CONFIG_PATH};/home/ikrechetov/projects/rp4_qt/sysroot/lib/arm-linux-gnueabihf/pkgconfig)
-# set(CMAKE_PREFIX_PATH "/home/ikrechetov/projects/rp4_qt/sysroot/lib/arm-linux-gnueabihf/pkgconfig")
+# find_package(Qt5 COMPONENTS Core REQUIRED)
+# # set(PKG_CONFIG_PATH ${PKG_CONFIG_PATH};/home/ikrechetov/projects/rp4_qt/sysroot/lib/arm-linux-gnueabihf/pkgconfig)
+# # set(CMAKE_PREFIX_PATH "/home/ikrechetov/projects/rp4_qt/sysroot/lib/arm-linux-gnueabihf/pkgconfig")
 
-include(FindPkgConfig)
-pkg_check_modules(GLIB REQUIRED glib-2.0)
-# set(GLIB_PKG_INCLUDE_DIRS
-#     ${GLIB_INCLUDE_DIRS}
-# )
-# set(GLIB_PKG_LDFLAGS
-#     ${GLIB_LDFLAGS}
-# )
+# include(FindPkgConfig)
+# pkg_check_modules(GLIB REQUIRED glib-2.0)
+# # set(GLIB_PKG_INCLUDE_DIRS
+# #     ${GLIB_INCLUDE_DIRS}
+# # )
+# # set(GLIB_PKG_LDFLAGS
+# #     ${GLIB_LDFLAGS}
+# # )
 
-qt5_wrap_cpp(QT_TEST_MOC ${CMAKE_CURRENT_SOURCE_DIR}/src/qt_main.hpp)
-add_executable(qtTest ${CMAKE_CURRENT_SOURCE_DIR}/src/qt_main.cpp ${QT_TEST_MOC})
-target_include_directories(qtTest PUBLIC ${Qt5Core_INCLUDE_DIRS} ${CMAKE_BINARY_DIR}/src)
-# qt5_use_modules(qtTest Core)
-# link_directories(/home/ikrechetov/projects/rp4_qt/sysroot/lib/arm-linux-gnueabihf/)
-target_link_libraries(qtTest PUBLIC Qt5::Core double-conversion gthread-2.0 pcre z ${GLIB_LDFLAGS} pthread dl)
-target_compile_options(qtTest PRIVATE "-fPIC" ${HSMCPP_QT_CXX_FLAGS})
+# qt5_wrap_cpp(QT_TEST_MOC ${CMAKE_CURRENT_SOURCE_DIR}/src/qt_main.hpp)
+# add_executable(qtTest ${CMAKE_CURRENT_SOURCE_DIR}/src/qt_main.cpp ${QT_TEST_MOC})
+# target_include_directories(qtTest PUBLIC ${Qt5Core_INCLUDE_DIRS} ${CMAKE_BINARY_DIR}/src)
+# # qt5_use_modules(qtTest Core)
+# # link_directories(/home/ikrechetov/projects/rp4_qt/sysroot/lib/arm-linux-gnueabihf/)
+# target_link_libraries(qtTest PUBLIC Qt5::Core double-conversion gthread-2.0 pcre z ${GLIB_LDFLAGS} pthread dl)
+# target_compile_options(qtTest PRIVATE "-fPIC" ${HSMCPP_QT_CXX_FLAGS})
 
-set(CMAKE_AUTOMOC OFF)
-set(CMAKE_AUTORCC OFF)
-set(CMAKE_AUTOUIC OFF)
+# set(CMAKE_AUTOMOC OFF)
+# set(CMAKE_AUTORCC OFF)
+# set(CMAKE_AUTOUIC OFF)

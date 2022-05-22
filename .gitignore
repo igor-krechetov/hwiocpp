@@ -1,5 +1,6 @@
 build
 thirdparty
+__pycache__
 
 # Prerequisites
 *.d

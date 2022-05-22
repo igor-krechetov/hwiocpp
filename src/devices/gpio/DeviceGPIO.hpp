@@ -157,6 +157,10 @@ public:
     DeviceGPIO() = default;
     virtual ~DeviceGPIO();
 
+    // TODO: delete later
+    void test();
+    void test2();
+
     bool openDevice(const RP_GPIOCHIP chip = RP_GPIOCHIP::GPIOCHIP0);
     bool openDevice(const std::string& chipname);
     void closeDevice() override;

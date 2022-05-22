@@ -8,10 +8,12 @@ GenericDevice::GenericDevice()
 
     if (reinterpret_cast<char*>(&i)[0] == 1)
     {
+        printf("Endianness::LITTLE\n");
         mNativeBytesOrder = Endianness::LITTLE;
     }
     else
     {
+        printf("Endianness::BIG\n");
         mNativeBytesOrder = Endianness::BIG;
     }
 
@@ -56,9 +58,8 @@ double GenericDevice::remap(double value, double oldMin, double oldMax, double n
 
 uint16_t GenericDevice::normalizeBytes(const uint16_t value, const Endianness expectedOrder)
 {
-    if (expectedOrder != mNativeBytesOrder)
+    if ((expectedOrder != Endianness::NATIVE) && (expectedOrder != mNativeBytesOrder))
     {
-        // return ((value >> 8) & 0xFF) | ((value << 8) & 0xFF00);
         return (GET_BYTE0(value) << 8) | GET_BYTE1(value);
     }
 
@@ -67,9 +68,8 @@ uint16_t GenericDevice::normalizeBytes(const uint16_t value, const Endianness ex
 
 uint32_t GenericDevice::normalizeBytes(const uint32_t value, const Endianness expectedOrder)
 {
-    if (expectedOrder != mNativeBytesOrder)
+    if ((expectedOrder != Endianness::NATIVE) && (expectedOrder != mNativeBytesOrder))
     {
-        // return ((value >> 8) & 0xFF) | ((value << 8) & 0xFF00);
         return (GET_BYTE0(value) << 24) |
                (GET_BYTE1(value) << 16) |
                (GET_BYTE2(value) << 8) |
@@ -83,7 +83,7 @@ const byte* GenericDevice::normalizeBytes(const byte* buffer, const size_t bytes
 {
     const byte* result = buffer;
 
-    if (expectedOrder != mNativeBytesOrder)
+    if ((expectedOrder != Endianness::NATIVE) && (expectedOrder != mNativeBytesOrder))
     {
         if (mBuffer.size() < bytesCount)
         {

@@ -169,7 +169,7 @@ bool DeviceI2C::writeBuffer(const byte* buffer, const size_t bytesCount, const E
 
 bool DeviceI2C::writeBuffer(const std::vector<byte>& buffer, const Endianness bytesOrder)
 {
-    return writeBuffer(buffer.data(), buffer.size());
+    return writeBuffer(buffer.data(), buffer.size(), bytesOrder);
 }
 
 bool DeviceI2C::writeBuffer(const byte cmd, const byte* buffer, const size_t bytesCount, const Endianness bytesOrder)
