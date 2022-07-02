@@ -1,3 +1,3 @@
 [submodule "modules/devutils"]
 	path = modules/devutils
-	url = https://github.com/igor-krechetov/hsmcpp.git
+	url = https://github.com/igor-krechetov/devutils.git
